@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react'
 import { createAssignment, getTasks, getUsers } from '../api'
+import { useAuthStore } from '../store/authStore'
 import '../styles/Modal.css'
 
 function TaskAssignmentModal({ onClose, onSuccess }) {
+  const user = useAuthStore((state) => state.user)
   const [tasks, setTasks] = useState([])
   const [users, setUsers] = useState([])
   const [formData, setFormData] = useState({
@@ -43,21 +45,27 @@ function TaskAssignmentModal({ onClose, onSuccess }) {
     setSubmitting(true)
 
     try {
+      const userId = user?.user_id || user?.id || 1
       const assignmentData = {
         task_id: parseInt(formData.task_id),
         user_id: parseInt(formData.assigned_to),
-        assigned_by: 1, // TODO: Get from authenticated user
+        assigned_by: userId,
         status: "Pending",
         due_date: formData.due_date || null,
       }
 
       await createAssignment(assignmentData)
-      alert('Task assigned successfully!')
-      onSuccess && onSuccess()
+      
+      const assignedUser = users.find(u => u.user_id === parseInt(formData.assigned_to))
+      const task = tasks.find(t => t.task_id === parseInt(formData.task_id))
+      
+      alert(`✅ Task assigned successfully!\n\nTask: ${task?.name || `#${formData.task_id}`}\nAssigned to: ${assignedUser?.username}\n\nThe user will receive a notification.`)
+      
+      if (onSuccess) onSuccess()
       onClose()
     } catch (error) {
       console.error('Assignment error:', error.response?.data)
-      alert('Failed to assign task: ' + (error.response?.data?.detail || error.message))
+      alert('❌ Failed to assign task: ' + (error.response?.data?.detail || error.message))
     } finally {
       setSubmitting(false)
     }

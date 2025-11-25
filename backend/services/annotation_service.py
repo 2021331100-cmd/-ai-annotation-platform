@@ -28,18 +28,32 @@ def create_task_assignment(db: Session, assignment: schemas.TaskAssignmentCreate
     db.commit()
     db.refresh(db_assignment)
     
+    # Get task details for notification
+    task = get_annotation_task(db, assignment.task_id)
+    task_info = f"Task #{assignment.task_id}"
+    if task and task.project:
+        task_info = f"Task #{assignment.task_id} from project '{task.project.project_name}'"
+    
     # Create notification for assigned user
     notification = models.Notification(
         user_id=assignment.user_id,
-        message=f"You have been assigned to task #{assignment.task_id}"
+        message=f"🎯 New task assigned: {task_info}"
     )
     db.add(notification)
     db.commit()
     
+    # Log the action
+    if assignment.assigned_by:
+        log_audit(db, assignment.assigned_by, "ASSIGN_TASK", f"Assigned task {assignment.task_id} to user {assignment.user_id}")
+    
     return db_assignment
 
 def get_task_assignments_by_user(db: Session, user_id: int, skip: int = 0, limit: int = 100):
-    return db.query(models.TaskAssignment).filter(
+    from sqlalchemy.orm import joinedload
+    return db.query(models.TaskAssignment).options(
+        joinedload(models.TaskAssignment.task).joinedload(models.AnnotationTask.project),
+        joinedload(models.TaskAssignment.task).joinedload(models.AnnotationTask.dataset)
+    ).filter(
         models.TaskAssignment.user_id == user_id
     ).offset(skip).limit(limit).all()
 

@@ -157,10 +157,18 @@ function AnnotatorDashboard() {
                 <div key={assignment.assignment_id} className="task-card">
                   <div className="task-header">
                     <h3>Task #{assignment.task_id}</h3>
+                    {assignment.task && assignment.task.project && (
+                      <span className="project-badge">
+                        {assignment.task.project.project_name}
+                      </span>
+                    )}
                     <span className={`status-badge status-${(assignment.status || 'pending').toLowerCase()}`}>
                       {assignment.status || 'Pending'}
                     </span>
                   </div>
+                  {assignment.due_date && (
+                    <p><strong>Due:</strong> {new Date(assignment.due_date).toLocaleDateString()}</p>
+                  )}
                   <div className="task-actions">
                     <button 
                       className="btn btn-sm btn-secondary"

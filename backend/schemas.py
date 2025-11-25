@@ -127,9 +127,13 @@ class TaskAssignmentCreate(TaskAssignmentBase):
 class TaskAssignment(TaskAssignmentBase):
     assignment_id: int
     assign_date: datetime
+    task: Optional['AnnotationTask'] = None
     
     class Config:
         from_attributes = True
+
+# Need to update forward references
+TaskAssignment.model_rebuild()
 
 # Annotation schemas
 class AnnotationBase(BaseModel):
