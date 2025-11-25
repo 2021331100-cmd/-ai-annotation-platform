@@ -137,6 +137,7 @@ class Review(Base):
     review_date = Column(DateTime, default=datetime.utcnow)
     feedback = Column(Text, nullable=True)
     status = Column(SQLEnum(ReviewStatus), default=ReviewStatus.PENDING)
+    quality_score = Column(Float, nullable=True)  # Quality score 0-10
     
     # Relationships
     annotation = relationship("Annotation", back_populates="reviews")
@@ -148,8 +149,10 @@ class AuditLog(Base):
     log_id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(Integer, ForeignKey("Users.user_id", ondelete="CASCADE"), nullable=False)
     action = Column(String(255), nullable=False)
+    entity_type = Column(String(50), nullable=True)  # Type of entity (Annotation, Task, etc.)
+    entity_id = Column(Integer, nullable=True)  # ID of the entity
     details = Column(Text, nullable=True)
-    time_stamp = Column(DateTime, default=datetime.utcnow)
+    timestamp = Column(DateTime, default=datetime.utcnow)  # Changed from time_stamp to timestamp
     
     # Relationships
     user = relationship("User", back_populates="audit_logs")

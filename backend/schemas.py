@@ -167,6 +167,7 @@ class ReviewBase(BaseModel):
     annotation_id: int
     feedback: Optional[str] = None
     status: ReviewStatus = ReviewStatus.PENDING
+    quality_score: Optional[float] = None
 
 class ReviewCreate(ReviewBase):
     reviewer_id: int
@@ -174,6 +175,7 @@ class ReviewCreate(ReviewBase):
 class ReviewUpdate(BaseModel):
     feedback: Optional[str] = None
     status: Optional[ReviewStatus] = None
+    quality_score: Optional[float] = None
 
 class Review(ReviewBase):
     review_id: int
@@ -187,14 +189,18 @@ class Review(ReviewBase):
 class AuditLogCreate(BaseModel):
     user_id: int
     action: str
+    entity_type: Optional[str] = None
+    entity_id: Optional[int] = None
     details: Optional[str] = None
 
 class AuditLog(BaseModel):
     log_id: int
     user_id: int
     action: str
+    entity_type: Optional[str] = None
+    entity_id: Optional[int] = None
     details: Optional[str] = None
-    time_stamp: datetime
+    timestamp: datetime
     
     class Config:
         from_attributes = True
