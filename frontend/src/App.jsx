@@ -14,6 +14,7 @@ import Projects from './pages/Projects'
 import Tasks from './pages/Tasks'
 import Annotations from './pages/Annotations'
 import Reviews from './pages/Reviews'
+import AdvancedFeatures from './pages/AdvancedFeatures'
 
 function PrivateRoute({ children, allowedRoles }) {
   const { user, isAuthenticated } = useAuthStore()
@@ -64,6 +65,14 @@ function App() {
               {(user?.role === 'Reviewer' || user?.role === 'Admin') && (
                 <Link to="/reviews" className="navbar-item">Reviews</Link>
               )}
+              <Link to="/advanced" className="navbar-item" style={{
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                color: '#fff',
+                borderRadius: '6px',
+                padding: '8px 16px'
+              }}>
+                🚀 Advanced
+              </Link>
             </div>
             <div className="navbar-user">
               <span className="user-info">{user?.username} ({user?.role})</span>
@@ -129,6 +138,12 @@ function App() {
             <Route path="/reviews" element={
               <PrivateRoute allowedRoles={['Reviewer', 'Admin']}>
                 <Reviews />
+              </PrivateRoute>
+            } />
+            
+            <Route path="/advanced" element={
+              <PrivateRoute>
+                <AdvancedFeatures />
               </PrivateRoute>
             } />
           </Routes>

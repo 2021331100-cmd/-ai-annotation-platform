@@ -644,6 +644,120 @@ def ai_consistency_check(payload: dict = Body(...)):
     consistency_result = AIReviewService.consistency_check(annotations)
     return consistency_result
 
+# ==================== ADVANCED FEATURES ====================
+from services.advanced_features import (
+    ActiveLearningService, VersionControlService, QualityMetricsService,
+    ConsensusService, ExportService
+)
+
+# Active Learning endpoints
+@app.get("/api/active-learning/uncertain-samples/{project_id}")
+def get_uncertain_samples(project_id: int, limit: int = 10, db: Session = Depends(get_db)):
+    """Get most uncertain samples for active learning"""
+    samples = ActiveLearningService.get_uncertain_samples(db, project_id, limit)
+    return {"project_id": project_id, "uncertain_samples": samples}
+
+@app.get("/api/active-learning/suggest-tasks/{user_id}/{project_id}")
+def suggest_next_tasks(user_id: int, project_id: int, count: int = 5, db: Session = Depends(get_db)):
+    """AI-powered task recommendation for annotators"""
+    suggestions = ActiveLearningService.suggest_next_tasks(db, user_id, project_id, count)
+    return {"user_id": user_id, "project_id": project_id, "suggested_tasks": suggestions}
+
+# Version Control endpoints
+@app.post("/api/annotations/{annotation_id}/version")
+def create_annotation_version(
+    annotation_id: int,
+    payload: dict = Body(...),
+    db: Session = Depends(get_db)
+):
+    """Create a new version of an annotation"""
+    user_id = payload.get("user_id")
+    content = payload.get("content")
+    label_ids = payload.get("label_ids", [])
+    description = payload.get("description", "")
+    
+    version = VersionControlService.create_version(
+        db, annotation_id, user_id, content, label_ids, description
+    )
+    return {"annotation_id": annotation_id, "version": version}
+
+@app.get("/api/annotations/{annotation_id}/versions")
+def get_annotation_versions(annotation_id: int, db: Session = Depends(get_db)):
+    """Get version history of an annotation"""
+    history = VersionControlService.get_version_history(db, annotation_id)
+    return {"annotation_id": annotation_id, "versions": history}
+
+@app.post("/api/annotations/{annotation_id}/restore/{version_id}")
+def restore_annotation_version(
+    annotation_id: int,
+    version_id: int,
+    user_id: int,
+    db: Session = Depends(get_db)
+):
+    """Restore annotation to a previous version"""
+    restored = VersionControlService.restore_version(db, annotation_id, version_id, user_id)
+    if not restored:
+        raise HTTPException(status_code=404, detail="Version not found or restore failed")
+    return {"message": "Version restored successfully", "annotation_id": annotation_id}
+
+# Quality Metrics endpoints
+@app.get("/api/metrics/annotator/{user_id}")
+def get_annotator_metrics(user_id: int, days: int = 30, db: Session = Depends(get_db)):
+    """Get performance metrics for an annotator"""
+    metrics = QualityMetricsService.calculate_annotator_metrics(db, user_id, days)
+    return metrics
+
+@app.get("/api/metrics/project/{project_id}")
+def get_project_metrics(project_id: int, db: Session = Depends(get_db)):
+    """Get overall project quality metrics"""
+    metrics = QualityMetricsService.calculate_project_metrics(db, project_id)
+    return metrics
+
+# Consensus endpoints
+@app.get("/api/consensus/agreement/{task_id}")
+def get_inter_annotator_agreement(task_id: int, db: Session = Depends(get_db)):
+    """Calculate inter-annotator agreement for a task"""
+    agreement = ConsensusService.calculate_inter_annotator_agreement(db, task_id)
+    return agreement
+
+@app.get("/api/consensus/labels/{task_id}")
+def get_consensus_labels(task_id: int, threshold: float = 0.5, db: Session = Depends(get_db)):
+    """Get consensus labels based on majority vote"""
+    labels = ConsensusService.get_consensus_labels(db, task_id, threshold)
+    return {"task_id": task_id, "consensus_label_ids": labels, "threshold": threshold}
+
+@app.post("/api/consensus/gold-standard/{task_id}")
+def create_gold_standard(
+    task_id: int,
+    payload: dict = Body(...),
+    db: Session = Depends(get_db)
+):
+    """Create gold standard annotation"""
+    label_ids = payload.get("label_ids", [])
+    created_by = payload.get("created_by")
+    
+    gold = ConsensusService.create_gold_standard(db, task_id, label_ids, created_by)
+    return {"task_id": task_id, "gold_annotation_id": gold.annotation_id}
+
+# Export endpoints
+@app.get("/api/export/coco/{project_id}")
+def export_coco(project_id: int, db: Session = Depends(get_db)):
+    """Export annotations in COCO format"""
+    coco_data = ExportService.export_to_coco(db, project_id)
+    return coco_data
+
+@app.get("/api/export/jsonl/{project_id}")
+def export_jsonl(project_id: int, db: Session = Depends(get_db)):
+    """Export annotations in JSONL format"""
+    jsonl_data = ExportService.export_to_jsonl(db, project_id)
+    return jsonl_data
+
+@app.get("/api/export/csv/{project_id}")
+def export_csv(project_id: int, db: Session = Depends(get_db)):
+    """Export annotations in CSV format"""
+    csv_data = ExportService.export_to_csv(db, project_id)
+    return {"data": csv_data}
+
 if __name__ == "__main__":
     port = int(os.getenv("API_PORT", 8000))
     host = os.getenv("API_HOST", "0.0.0.0")
