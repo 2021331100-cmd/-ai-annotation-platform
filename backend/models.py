@@ -32,10 +32,11 @@ class User(Base):
     role = Column(SQLEnum(UserRole), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     
-    # Relationships
-    task_assignments = relationship("TaskAssignment", back_populates="user")
+    # Relationships - specify foreign_keys to avoid ambiguity
+    task_assignments = relationship("TaskAssignment", back_populates="user", foreign_keys="TaskAssignment.user_id")
+    assigned_tasks = relationship("TaskAssignment", foreign_keys="TaskAssignment.assigned_by")
     annotations = relationship("Annotation", back_populates="user")
-    reviews = relationship("Review", back_populates="reviewer")
+    reviews = relationship("Review", back_populates="reviewer", foreign_keys="Review.reviewer_id")
     audit_logs = relationship("AuditLog", back_populates="user")
     notifications = relationship("Notification", back_populates="user")
 
@@ -96,12 +97,15 @@ class TaskAssignment(Base):
     assignment_id = Column(Integer, primary_key=True, autoincrement=True)
     task_id = Column(Integer, ForeignKey("Annotation_Task.task_id", ondelete="CASCADE"), nullable=False)
     user_id = Column(Integer, ForeignKey("Users.user_id", ondelete="CASCADE"), nullable=False)
+    assigned_by = Column(Integer, ForeignKey("Users.user_id", ondelete="SET NULL"), nullable=True)
     assign_date = Column(DateTime, default=datetime.utcnow)
     due_date = Column(Date, nullable=True)
+    status = Column(String(50), default="Pending")
     
-    # Relationships
+    # Relationships - explicitly specify foreign_keys to resolve ambiguity
     task = relationship("AnnotationTask", back_populates="task_assignments")
-    user = relationship("User", back_populates="task_assignments")
+    user = relationship("User", back_populates="task_assignments", foreign_keys=[user_id])
+    assigner = relationship("User", foreign_keys=[assigned_by])
 
 class Annotation(Base):
     __tablename__ = "Annotation"

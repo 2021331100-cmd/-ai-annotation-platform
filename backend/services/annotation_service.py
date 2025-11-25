@@ -218,7 +218,7 @@ def get_audit_logs(db: Session, user_id: Optional[int] = None, skip: int = 0, li
     query = db.query(models.AuditLog)
     if user_id:
         query = query.filter(models.AuditLog.user_id == user_id)
-    return query.order_by(models.AuditLog.time_stamp.desc()).offset(skip).limit(limit).all()
+    return query.order_by(models.AuditLog.timestamp.desc()).offset(skip).limit(limit).all()
 
 # Notification functions
 def create_notification(db: Session, notification: schemas.NotificationCreate):
