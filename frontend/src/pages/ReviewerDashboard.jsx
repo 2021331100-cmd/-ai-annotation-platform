@@ -18,14 +18,24 @@ function ReviewerDashboard() {
   const [selectedAnnotation, setSelectedAnnotation] = useState(null)
   const [showAIModal, setShowAIModal] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
   useEffect(() => {
-    loadDashboardData()
-  }, [])
+    if (user?.id || user?.user_id) {
+      loadDashboardData()
+    } else {
+      setLoading(false)
+      setError('User not logged in properly')
+    }
+  }, [user])
 
   const loadDashboardData = async () => {
     try {
-      const reviewsRes = await getReviewerReviews(user.id)
+      setLoading(true)
+      setError(null)
+      
+      const userId = user.user_id || user.id
+      const reviewsRes = await getReviewerReviews(userId)
       setReviews(reviewsRes.data || [])
 
       const approved = reviewsRes.data.filter(r => r.status === 'Approved').length
@@ -43,6 +53,9 @@ function ReviewerDashboard() {
       setPendingAnnotations([])
     } catch (error) {
       console.error('Failed to load dashboard data:', error)
+      setError(error.response?.data?.detail || error.message || 'Failed to load dashboard data')
+      setReviews([])
+      setPendingAnnotations([])
     } finally {
       setLoading(false)
     }
@@ -55,19 +68,40 @@ function ReviewerDashboard() {
 
   const handleQuickReview = async (annotationId, status, feedback) => {
     try {
+      const userId = user.user_id || user.id
       await createReview({
         annotation_id: annotationId,
-        reviewer_id: user.id,
+        reviewer_id: userId,
         status: status,
         feedback: feedback,
       })
+      alert('Review submitted successfully!')
       loadDashboardData()
     } catch (error) {
-      alert('Failed to submit review')
+      console.error('Failed to submit review:', error)
+      alert('Failed to submit review: ' + (error.response?.data?.detail || error.message))
     }
   }
 
   if (loading) return <div className="loading">Loading dashboard...</div>
+
+  if (error) {
+    return (
+      <div className="dashboard">
+        <div className="dashboard-header">
+          <div>
+            <h1>🔍 Reviewer Dashboard</h1>
+            <p>Welcome back, {user?.username}!</p>
+          </div>
+          <NotificationBell />
+        </div>
+        <div className="error-message" style={{ margin: '20px', padding: '20px', background: '#fee', borderRadius: '8px' }}>
+          <p>⚠️ {error}</p>
+          <button className="btn btn-primary" onClick={loadDashboardData}>Retry</button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="dashboard">

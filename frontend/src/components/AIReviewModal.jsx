@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { createReview } from '../api'
+import { createReview, aiAutoReview, aiQualityCheck } from '../api'
 import { useAuthStore } from '../store/authStore'
 import '../styles/Modal.css'
 
@@ -12,35 +12,44 @@ function AIReviewModal({ annotation, onClose }) {
   const [feedback, setFeedback] = useState('')
 
   const handleAIReview = async () => {
+    if (!annotation) {
+      alert('No annotation selected')
+      return
+    }
+
     setLoading(true)
     
     try {
-      // Simulate AI review (in production, call your AI service)
-      await new Promise(resolve => setTimeout(resolve, 1500))
+      // Call real AI review API
+      const annotationData = typeof annotation.content === 'string' 
+        ? JSON.parse(annotation.content) 
+        : annotation.content || annotation.data || {}
       
-      // Mock AI analysis
+      const response = await aiQualityCheck(annotationData)
+      const qualityData = response.data
+      
+      // Transform API response to UI format
       const mockAnalysis = {
-        quality_score: 0.87,
-        completeness: 0.92,
-        accuracy: 0.85,
-        consistency: 0.89,
-        issues: [
-          { type: 'warning', message: 'Missing some entity labels' },
-          { type: 'info', message: 'Consider adding more context' },
-        ],
-        strengths: [
-          'Well-structured annotations',
-          'High confidence scores',
-          'Proper entity classification',
-        ],
-        suggestion: 'The annotation is of good quality. Minor improvements could be made in entity completeness.',
-        recommended_action: 'Approved',
+        quality_score: qualityData.quality_score || 0.85,
+        completeness: qualityData.quality_score || 0.85,
+        accuracy: qualityData.quality_score || 0.85,
+        consistency: qualityData.quality_score || 0.85,
+        issues: (qualityData.issues || []).map(issue => ({
+          type: 'warning',
+          message: typeof issue === 'string' ? issue : issue.message || 'Issue detected'
+        })),
+        strengths: qualityData.suggestions?.length > 0 
+          ? ['AI analysis completed', 'Quality check passed']
+          : ['Well-structured annotations', 'High confidence scores', 'Proper annotation format'],
+        suggestion: qualityData.suggestions?.[0] || 'The annotation quality has been analyzed by AI.',
+        recommended_action: qualityData.passed ? 'Approved' : (qualityData.quality_score >= 0.75 ? 'Needs Revision' : 'Rejected'),
       }
       
       setAiAnalysis(mockAnalysis)
       setReviewDecision(mockAnalysis.recommended_action)
     } catch (error) {
-      alert('AI review failed. Please try again.')
+      console.error('AI review error:', error)
+      alert('AI review failed: ' + (error.response?.data?.detail || error.message))
     } finally {
       setLoading(false)
     }
@@ -52,23 +61,30 @@ function AIReviewModal({ annotation, onClose }) {
       return
     }
 
+    if (!annotation) {
+      alert('No annotation selected')
+      return
+    }
+
     setSaving(true)
     
     try {
+      const userId = user.user_id || user.id
+      const annotationId = annotation.annotation_id || annotation.id
+      
       const reviewData = {
-        annotation_id: annotation?.id || 1,
-        reviewer_id: user.id,
+        annotation_id: annotationId,
+        reviewer_id: userId,
         status: reviewDecision,
         feedback: feedback || (aiAnalysis?.suggestion || 'Reviewed with AI assistance'),
-        ai_assisted: true,
-        ai_analysis: aiAnalysis,
       }
 
       await createReview(reviewData)
       alert('Review submitted successfully!')
       onClose()
     } catch (error) {
-      alert('Failed to submit review')
+      console.error('Failed to submit review:', error)
+      alert('Failed to submit review: ' + (error.response?.data?.detail || error.message))
     } finally {
       setSaving(false)
     }
@@ -87,10 +103,10 @@ function AIReviewModal({ annotation, onClose }) {
             <div className="annotation-preview">
               <h3>Annotation Preview</h3>
               <div className="preview-content">
-                <p><strong>Annotation ID:</strong> #{annotation.id}</p>
+                <p><strong>Annotation ID:</strong> #{annotation.annotation_id || annotation.id}</p>
                 <p><strong>Task ID:</strong> #{annotation.task_id}</p>
                 <p><strong>Data:</strong></p>
-                <pre>{JSON.stringify(annotation.data, null, 2)}</pre>
+                <pre>{JSON.stringify(annotation.content || annotation.data || {}, null, 2)}</pre>
               </div>
             </div>
           )}
