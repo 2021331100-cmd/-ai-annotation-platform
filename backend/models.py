@@ -18,9 +18,10 @@ class ProjectStatus(str, enum.Enum):
     ON_HOLD = "On Hold"
 
 class ReviewStatus(str, enum.Enum):
-    PENDING = "Pending"
-    APPROVED = "Approved"
-    REJECTED = "Rejected"
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    NEEDS_REVISION = "needs_revision"
 
 class User(Base):
     __tablename__ = "Users"
@@ -105,7 +106,7 @@ class TaskAssignment(Base):
     # Relationships - explicitly specify foreign_keys to resolve ambiguity
     task = relationship("AnnotationTask", back_populates="task_assignments")
     user = relationship("User", back_populates="task_assignments", foreign_keys=[user_id])
-    assigner = relationship("User", foreign_keys=[assigned_by])
+    assigner = relationship("User", foreign_keys=[assigned_by], overlaps="assigned_tasks")
 
 class Annotation(Base):
     __tablename__ = "Annotation"

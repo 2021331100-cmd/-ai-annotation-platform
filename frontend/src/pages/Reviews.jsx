@@ -55,6 +55,7 @@ function Reviews() {
         status: formData.status
       }
       
+      console.log('Submitting review:', reviewData)
       await createReview(reviewData)
       alert('Review submitted successfully!')
       setShowReviewModal(false)
@@ -63,7 +64,8 @@ function Reviews() {
       loadReviewData()
     } catch (error) {
       console.error('Error creating review:', error)
-      alert('Failed to submit review: ' + (error.response?.data?.detail || error.message))
+      const errorMessage = error.response?.data?.detail || error.message || 'Unknown error'
+      alert('Failed to submit review: ' + errorMessage)
     }
   }
 
@@ -75,12 +77,12 @@ function Reviews() {
 
   const getStatusBadgeClass = (status) => {
     const statusMap = {
-      pending: 'status-badge-pending',
-      approved: 'status-badge-completed',
-      rejected: 'status-badge-in-progress',
-      needs_revision: 'status-badge-not-started'
+      'pending': 'status-badge-pending',
+      'approved': 'status-badge-completed',
+      'rejected': 'status-badge-in-progress',
+      'needs_revision': 'status-badge-not-started'
     }
-    return statusMap[status] || 'status-badge-pending'
+    return statusMap[status?.toLowerCase()] || 'status-badge-pending'
   }
 
   if (loading) {
@@ -225,7 +227,7 @@ function Reviews() {
                           Annotation #{review.annotation_id}
                         </h3>
                         <span className={getStatusBadgeClass(review.status)}>
-                          {review.status?.toUpperCase()}
+                          {review.status?.replace('_', ' ').toUpperCase()}
                         </span>
                       </div>
                       

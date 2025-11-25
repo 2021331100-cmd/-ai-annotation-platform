@@ -119,4 +119,48 @@ export const aiQualityCheck = (annotationData) =>
 export const aiConsistencyCheck = (annotations) => 
   api.post('/ai/review/consistency', { annotations })
 
+// Export Formats
+export const exportYOLO = (projectId) => api.get(`/export/yolo/${projectId}`, { responseType: 'blob' })
+export const exportVOC = (projectId) => api.get(`/export/voc/${projectId}`, { responseType: 'blob' })
+export const exportCoNLL = (projectId) => api.get(`/export/conll/${projectId}`, { responseType: 'blob' })
+export const exportZIP = (projectId, format = 'all') => 
+  api.get(`/export/zip/${projectId}?format=${format}`, { responseType: 'blob' })
+
+// Bulk Upload
+export const bulkUploadFiles = (formData) => 
+  api.post('/datasets/bulk-upload', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  })
+export const uploadZipDataset = (formData) => 
+  api.post('/datasets/upload-zip', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  })
+export const getUploadStats = () => api.get('/datasets/upload-stats')
+
+// Cloud Storage (S3)
+export const uploadToS3 = (formData) => 
+  api.post('/cloud-storage/s3/upload', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  })
+export const listS3Files = () => api.get('/cloud-storage/s3/list')
+export const getS3PresignedUrl = (key) => api.get(`/cloud-storage/s3/presigned-url?key=${key}`)
+export const deleteS3File = (key) => api.delete(`/cloud-storage/s3/delete?key=${key}`)
+
+// OAuth
+export const getOAuthProviders = () => api.get('/auth/oauth/providers')
+export const initiateOAuthLogin = (provider) => {
+  window.location.href = `${API_BASE_URL}/auth/oauth/${provider}/login`
+}
+
+// OCR
+export const extractTextFromImage = (formData, lang = 'eng') => 
+  api.post(`/ocr/extract-text?lang=${lang}`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  })
+export const extractTextFromPDF = (formData, lang = 'eng') => 
+  api.post(`/ocr/extract-pdf?lang=${lang}`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  })
+export const getOCRLanguages = () => api.get('/ocr/languages')
+
 export default api

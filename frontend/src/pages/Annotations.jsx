@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { getTasks, createAnnotation, getLabels, getAnnotations, updateAnnotation, deleteAnnotation, getUserAnnotations, getUserAssignments } from '../api'
 import { useAuthStore } from '../store/authStore'
 import AIAnnotationModal from '../components/AIAnnotationModal'
+import OCRModal from '../components/OCRModal'
 import '../styles/Dashboard.css'
 
 export default function Annotations() {
@@ -13,6 +14,7 @@ export default function Annotations() {
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [showAIModal, setShowAIModal] = useState(false)
+  const [showOCRModal, setShowOCRModal] = useState(false)
   const [editingAnnotation, setEditingAnnotation] = useState(null)
   const [selectedTask, setSelectedTask] = useState(null)
   const [formData, setFormData] = useState({
@@ -128,6 +130,21 @@ export default function Annotations() {
     }))
   }
 
+  const handleOCRTextExtracted = (ocrData) => {
+    // Use OCR extracted text as annotation content
+    const content = JSON.stringify({
+      type: 'ocr_text',
+      text: ocrData.text,
+      confidence: ocrData.confidence,
+      language: ocrData.language,
+      word_count: ocrData.words?.length || 0,
+      extracted_at: new Date().toISOString()
+    }, null, 2)
+    
+    setFormData(prev => ({ ...prev, content }))
+    alert('OCR text extracted! You can now save it as an annotation.')
+  }
+
   if (loading) {
     return <div className="loading">Loading...</div>
   }
@@ -155,6 +172,22 @@ export default function Annotations() {
             }}
           >
             🤖 AI Annotation
+          </button>
+          <button 
+            onClick={() => setShowOCRModal(true)}
+            style={{
+              padding: '10px 20px',
+              borderRadius: '8px',
+              border: 'none',
+              background: 'linear-gradient(135deg, #4ECDC4 0%, #44A08D 100%)',
+              color: '#fff',
+              cursor: 'pointer',
+              fontWeight: '600',
+              fontSize: '0.95rem',
+              boxShadow: '0 4px 12px rgba(78, 205, 196, 0.3)'
+            }}
+          >
+            🔍 OCR Extract
           </button>
         </div>
       </div>
@@ -461,6 +494,13 @@ export default function Annotations() {
         onSuccess={loadData}
         tasks={tasks}
         task={selectedTask}
+      />
+
+      {/* OCR Modal */}
+      <OCRModal
+        isOpen={showOCRModal}
+        onClose={() => setShowOCRModal(false)}
+        onTextExtracted={handleOCRTextExtracted}
       />
     </div>
   )

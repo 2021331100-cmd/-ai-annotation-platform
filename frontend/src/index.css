@@ -2,6 +2,8 @@
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 body {
@@ -11,11 +13,16 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background-color: #f5f5f5;
+  overflow-x: hidden;
 }
 
 code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-width: 100%;
+  display: inline-block;
 }
 
 .container {
@@ -125,6 +132,9 @@ textarea.form-control {
   width: 100%;
   border-collapse: collapse;
   background: white;
+  table-layout: auto;
+  overflow-x: auto;
+  display: block;
 }
 
 .table th,
@@ -132,16 +142,39 @@ textarea.form-control {
   padding: 12px;
   text-align: left;
   border-bottom: 1px solid #ddd;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  max-width: 300px;
 }
 
 .table th {
   background-color: #f8f9fa;
   font-weight: 600;
   color: #333;
+  white-space: nowrap;
 }
 
 .table tr:hover {
   background-color: #f5f5f5;
+}
+
+/* Responsive table wrapper */
+.table-wrapper {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  max-width: 100%;
+}
+
+@media (max-width: 768px) {
+  .table {
+    font-size: 0.9rem;
+  }
+  
+  .table th,
+  .table td {
+    padding: 8px;
+    max-width: 200px;
+  }
 }
 
 /* Badges */
@@ -242,3 +275,103 @@ textarea.form-control {
 
 .gap-1 { gap: 10px; }
 .gap-2 { gap: 20px; }
+
+/* Text overflow utilities */
+.text-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.text-wrap {
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  white-space: normal;
+}
+
+.text-pre-wrap {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Scrollable containers */
+.scrollable {
+  overflow: auto;
+  max-height: 500px;
+}
+
+.scrollable-x {
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+.scrollable-y {
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Prevent layout shifts from long content */
+.content-container {
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.content-container > * {
+  max-width: 100%;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+/* Form improvements */
+input, textarea, select {
+  max-width: 100%;
+}
+
+textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+/* Button improvements */
+button {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Modal improvements */
+.modal-overlay {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.modal-content {
+  max-height: 90vh;
+  overflow-y: auto;
+  max-width: 95vw;
+}
+
+/* Responsive improvements */
+@media (max-width: 768px) {
+  body {
+    font-size: 14px;
+  }
+  
+  .dashboard {
+    padding: 20px;
+  }
+  
+  .dashboard-header h1 {
+    font-size: 1.75rem;
+  }
+  
+  .stat-card {
+    padding: 20px;
+  }
+  
+  .modal-content {
+    padding: 15px;
+  }
+}

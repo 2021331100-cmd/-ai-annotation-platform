@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react'
-import { getProjects, createProject, deleteProject } from '../api'
+import { getProjects, createProject, deleteProject, exportYOLO, exportVOC, exportCoNLL, exportZIP } from '../api'
 
 export default function Projects() {
   const [projects, setProjects] = useState([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
+  const [exportingProject, setExportingProject] = useState(null)
   const [formData, setFormData] = useState({
     project_name: '',
     description: '',
@@ -55,6 +56,52 @@ export default function Projects() {
     }
   }
 
+  const handleExport = async (projectId, format) => {
+    try {
+      setExportingProject(projectId)
+      let response
+      let filename
+      
+      switch(format) {
+        case 'yolo':
+          response = await exportYOLO(projectId)
+          filename = `project_${projectId}_yolo.txt`
+          break
+        case 'voc':
+          response = await exportVOC(projectId)
+          filename = `project_${projectId}_voc.xml`
+          break
+        case 'conll':
+          response = await exportCoNLL(projectId)
+          filename = `project_${projectId}_conll.txt`
+          break
+        case 'zip':
+          response = await exportZIP(projectId, 'all')
+          filename = `project_${projectId}_all_formats.zip`
+          break
+        default:
+          throw new Error('Unknown format')
+      }
+
+      // Create download link
+      const url = window.URL.createObjectURL(new Blob([response.data]))
+      const link = document.createElement('a')
+      link.href = url
+      link.setAttribute('download', filename)
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+      
+      alert(`Export successful! Downloaded ${filename}`)
+    } catch (error) {
+      console.error('Error exporting project:', error)
+      alert('Failed to export: ' + (error.response?.data?.detail || error.message))
+    } finally {
+      setExportingProject(null)
+    }
+  }
+
   const getStatusBadgeClass = (status) => {
     const classes = {
       'Pending': 'badge-warning',
@@ -100,28 +147,69 @@ export default function Projects() {
                 <th>Status</th>
                 <th>Start Date</th>
                 <th>Created At</th>
+                <th>Export</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {projects.map(project => (
                 <tr key={project.project_id}>
-                  <td><strong>{project.project_name}</strong></td>
-                  <td>{project.description || '-'}</td>
+                  <td><strong style={{whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'block', maxWidth: '200px'}}>{project.project_name}</strong></td>
+                  <td><div style={{maxWidth: '250px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>{project.description || '-'}</div></td>
                   <td>
                     <span className={`badge ${getStatusBadgeClass(project.status)}`}>
                       {project.status}
                     </span>
                   </td>
-                  <td>{project.start_date || '-'}</td>
-                  <td>{new Date(project.created_at).toLocaleDateString()}</td>
+                  <td style={{whiteSpace: 'nowrap'}}>{project.start_date || '-'}</td>
+                  <td style={{whiteSpace: 'nowrap'}}>{new Date(project.created_at).toLocaleDateString()}</td>
+                  <td>
+                    <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
+                      <button 
+                        className="btn btn-sm" 
+                        style={{ padding: '4px 8px', fontSize: '11px', background: '#4CAF50', color: '#fff', border: 'none', borderRadius: '4px', whiteSpace: 'nowrap' }}
+                        onClick={() => handleExport(project.project_id, 'yolo')}
+                        disabled={exportingProject === project.project_id}
+                        title="Export in YOLO format"
+                      >
+                        📦 YOLO
+                      </button>
+                      <button 
+                        className="btn btn-sm" 
+                        style={{ padding: '4px 8px', fontSize: '11px', background: '#2196F3', color: '#fff', border: 'none', borderRadius: '4px', whiteSpace: 'nowrap' }}
+                        onClick={() => handleExport(project.project_id, 'voc')}
+                        disabled={exportingProject === project.project_id}
+                        title="Export in Pascal VOC format"
+                      >
+                        📄 VOC
+                      </button>
+                      <button 
+                        className="btn btn-sm" 
+                        style={{ padding: '4px 8px', fontSize: '11px', background: '#FF9800', color: '#fff', border: 'none', borderRadius: '4px', whiteSpace: 'nowrap' }}
+                        onClick={() => handleExport(project.project_id, 'conll')}
+                        disabled={exportingProject === project.project_id}
+                        title="Export in CoNLL format"
+                      >
+                        📝 CoNLL
+                      </button>
+                      <button 
+                        className="btn btn-sm" 
+                        style={{ padding: '4px 8px', fontSize: '11px', background: '#9C27B0', color: '#fff', border: 'none', borderRadius: '4px', whiteSpace: 'nowrap' }}
+                        onClick={() => handleExport(project.project_id, 'zip')}
+                        disabled={exportingProject === project.project_id}
+                        title="Download all formats as ZIP"
+                      >
+                        📥 ZIP All
+                      </button>
+                    </div>
+                  </td>
                   <td>
                     <button 
                       className="btn btn-danger" 
-                      style={{ padding: '5px 10px', fontSize: '12px' }}
+                      style={{ padding: '5px 10px', fontSize: '12px', whiteSpace: 'nowrap' }}
                       onClick={() => handleDelete(project.project_id)}
                     >
-                      Delete
+                      🗑️ Delete
                     </button>
                   </td>
                 </tr>

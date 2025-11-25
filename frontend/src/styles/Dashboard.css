@@ -25,12 +25,18 @@
   -webkit-text-fill-color: transparent;
   margin-bottom: 10px;
   font-weight: 700;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  max-width: 100%;
 }
 
 .dashboard-header p {
   color: #6c757d;
   font-size: 1.1rem;
   font-weight: 500;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  max-width: 100%;
 }
 
 .stats-grid {
@@ -79,6 +85,39 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  white-space: normal;
+}
+
+/* Global text overflow fixes */
+* {
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+pre, code {
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+table td, table th {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 0;
+}
+
+table td[title], table th[title] {
+  cursor: help;
 }
 
 .stat-success { border-left: 4px solid #28a745; }

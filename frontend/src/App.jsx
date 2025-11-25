@@ -15,6 +15,10 @@ import Tasks from './pages/Tasks'
 import Annotations from './pages/Annotations'
 import Reviews from './pages/Reviews'
 import AdvancedFeatures from './pages/AdvancedFeatures'
+import Resources from './pages/Resources'
+import CrowdManagement from './pages/CrowdManagement'
+import AnnotationTypes from './pages/AnnotationTypes'
+import QualityMetrics from './pages/QualityMetrics'
 
 function PrivateRoute({ children, allowedRoles }) {
   const { user, isAuthenticated } = useAuthStore()
@@ -47,6 +51,37 @@ function App() {
   return (
     <Router>
       <div className="app">
+        {/* Public Navbar for all users */}
+        {!isAuthenticated && (
+          <nav className="navbar">
+            <div className="navbar-brand">
+              <h1>🎯 AI Annotation Platform</h1>
+            </div>
+            <div className="navbar-menu">
+              <Link to="/" className="navbar-item">Home</Link>
+              <Link to="/annotation-types" className="navbar-item">🎨 Annotation Types</Link>
+              <Link to="/resources" className="navbar-item">📚 Resources</Link>
+              <Link to="/signin" className="navbar-item" style={{
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                color: '#fff',
+                borderRadius: '6px',
+                padding: '8px 16px'
+              }}>
+                Sign In
+              </Link>
+              <Link to="/signup" className="navbar-item" style={{
+                background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+                color: '#fff',
+                borderRadius: '6px',
+                padding: '8px 16px'
+              }}>
+                Sign Up
+              </Link>
+            </div>
+          </nav>
+        )}
+
+        {/* Authenticated User Navbar */}
         {isAuthenticated && (
           <nav className="navbar">
             <div className="navbar-brand">
@@ -65,6 +100,14 @@ function App() {
               {(user?.role === 'Reviewer' || user?.role === 'Admin') && (
                 <Link to="/reviews" className="navbar-item">Reviews</Link>
               )}
+              {(user?.role === 'Admin' || user?.role === 'Manager') && (
+                <>
+                  <Link to="/crowd" className="navbar-item">👥 Crowd</Link>
+                  <Link to="/quality" className="navbar-item">📊 Quality</Link>
+                </>
+              )}
+              <Link to="/annotation-types" className="navbar-item">🎨 Types</Link>
+              <Link to="/resources" className="navbar-item">📚 Resources</Link>
               <Link to="/advanced" className="navbar-item" style={{
                 background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                 color: '#fff',
@@ -86,6 +129,10 @@ function App() {
             <Route path="/" element={isAuthenticated ? <Navigate to={getDashboardRoute()} /> : <HomePage />} />
             <Route path="/signup" element={!isAuthenticated ? <SignUp /> : <Navigate to={getDashboardRoute()} />} />
             <Route path="/signin" element={!isAuthenticated ? <SignIn /> : <Navigate to={getDashboardRoute()} />} />
+            
+            {/* Public Routes - accessible to everyone */}
+            <Route path="/resources" element={<Resources />} />
+            <Route path="/annotation-types" element={<AnnotationTypes />} />
             
             <Route path="/admin/dashboard" element={
               <PrivateRoute allowedRoles={['Admin']}>
@@ -144,6 +191,18 @@ function App() {
             <Route path="/advanced" element={
               <PrivateRoute>
                 <AdvancedFeatures />
+              </PrivateRoute>
+            } />
+            
+            <Route path="/crowd" element={
+              <PrivateRoute allowedRoles={['Admin', 'Manager']}>
+                <CrowdManagement />
+              </PrivateRoute>
+            } />
+            
+            <Route path="/quality" element={
+              <PrivateRoute allowedRoles={['Admin', 'Manager', 'Reviewer']}>
+                <QualityMetrics />
               </PrivateRoute>
             } />
           </Routes>

@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, Form, Body
+from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, Form, Body, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
@@ -54,7 +54,7 @@ app = FastAPI(
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173"],
+    allow_origins=["http://localhost:3000", "http://localhost:3001", "http://localhost:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -262,6 +262,101 @@ async def upload_dataset(
         print(f"Error during upload: {str(e)}")
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+
+@app.post("/api/datasets/bulk-upload")
+async def bulk_upload_files(files: List[UploadFile] = File(...), db: Session = Depends(get_db)):
+    """
+    Upload multiple files at once
+    
+    Args:
+        files: List of files to upload
+    
+    Returns:
+        Upload results with success and failed files
+    """
+    from services.bulk_upload_service import BulkUploadService
+    from pathlib import Path
+    
+    results = await BulkUploadService.upload_multiple_files(files)
+    
+    # Create dataset entries for successful uploads
+    created_datasets = []
+    for success_file in results['success']:
+        try:
+            db_dataset = models.Dataset(
+                dataset_name=success_file['filename'],
+                description=f"Bulk uploaded {success_file['file_type']} file",
+                format=Path(success_file['filename']).suffix
+            )
+            db.add(db_dataset)
+            db.commit()
+            db.refresh(db_dataset)
+            
+            created_datasets.append({
+                'dataset_id': db_dataset.dataset_id,
+                'filename': success_file['filename']
+            })
+        except Exception as e:
+            print(f"Error creating dataset entry: {e}")
+    
+    results['created_datasets'] = created_datasets
+    
+    return results
+
+@app.post("/api/datasets/upload-zip")
+async def upload_zip_file(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    """
+    Upload and extract a ZIP file containing multiple datasets
+    
+    Args:
+        file: ZIP file to upload and extract
+    
+    Returns:
+        Extraction results with all extracted files
+    """
+    from services.bulk_upload_service import BulkUploadService
+    from pathlib import Path
+    
+    # Validate it's a ZIP file
+    if not file.filename.endswith('.zip'):
+        raise HTTPException(status_code=400, detail="File must be a ZIP archive")
+    
+    results = await BulkUploadService.extract_and_upload_zip(file)
+    
+    if 'error' in results:
+        raise HTTPException(status_code=400, detail=results['error'])
+    
+    # Create dataset entries for extracted files
+    created_datasets = []
+    for success_file in results['success']:
+        try:
+            db_dataset = models.Dataset(
+                dataset_name=success_file['filename'],
+                description=f"Extracted from ZIP: {file.filename}",
+                format=Path(success_file['filename']).suffix
+            )
+            db.add(db_dataset)
+            db.commit()
+            db.refresh(db_dataset)
+            
+            created_datasets.append({
+                'dataset_id': db_dataset.dataset_id,
+                'filename': success_file['filename']
+            })
+        except Exception as e:
+            print(f"Error creating dataset entry: {e}")
+    
+    results['created_datasets'] = created_datasets
+    
+    return results
+
+@app.get("/api/datasets/upload-stats")
+def get_upload_statistics(db: Session = Depends(get_db)):
+    """Get statistics about uploaded files"""
+    from services.bulk_upload_service import BulkUploadService
+    
+    stats = BulkUploadService.get_upload_statistics()
+    return stats
 
 @app.get("/api/datasets/", response_model=List[schemas.Dataset])
 def list_datasets(skip: int = 0, limit: int = 100, project_id: Optional[int] = None, db: Session = Depends(get_db)):
@@ -649,6 +744,9 @@ from services.advanced_features import (
     ActiveLearningService, VersionControlService, QualityMetricsService,
     ConsensusService, ExportService
 )
+from services.annotation_types import AnnotationTypeService
+from services.crowd_management import CrowdManagementService
+from services.resources_service import ResourcesService
 
 # Active Learning endpoints
 @app.get("/api/active-learning/uncertain-samples/{project_id}")
@@ -757,6 +855,500 @@ def export_csv(project_id: int, db: Session = Depends(get_db)):
     """Export annotations in CSV format"""
     csv_data = ExportService.export_to_csv(db, project_id)
     return {"data": csv_data}
+
+@app.get("/api/export/yolo/{project_id}")
+def export_yolo(project_id: int, db: Session = Depends(get_db)):
+    """Export annotations in YOLO format for object detection"""
+    from services.export_formats import YOLOExportService
+    yolo_data = YOLOExportService.export_to_yolo(db, project_id)
+    return yolo_data
+
+@app.get("/api/export/voc/{project_id}")
+def export_voc(project_id: int, db: Session = Depends(get_db)):
+    """Export annotations in Pascal VOC XML format"""
+    from services.export_formats import PascalVOCExportService
+    voc_data = PascalVOCExportService.export_to_voc(db, project_id)
+    return voc_data
+
+@app.get("/api/export/conll/{project_id}")
+def export_conll(project_id: int, db: Session = Depends(get_db)):
+    """Export annotations in CoNLL format for NER"""
+    from services.export_formats import CoNLLExportService
+    conll_data = CoNLLExportService.export_to_conll(db, project_id)
+    return conll_data
+
+@app.get("/api/export/zip/{project_id}")
+def export_zip(project_id: int, format: str = "all", db: Session = Depends(get_db)):
+    """
+    Export project as ZIP file with all annotations in multiple formats
+    
+    Args:
+        project_id: Project ID to export
+        format: Export format - 'yolo', 'voc', 'coco', 'jsonl', 'csv', 'conll', or 'all' (default)
+    
+    Returns:
+        ZIP file with annotations in requested format(s)
+    """
+    from fastapi.responses import Response
+    from services.export_formats import ZIPExportService
+    
+    try:
+        zip_bytes = ZIPExportService.export_project_as_zip(db, project_id, format)
+        project = db.query(models.Project).filter(models.Project.project_id == project_id).first()
+        filename = f"{project.project_name.replace(' ', '_')}_export.zip"
+        
+        return Response(
+            content=zip_bytes,
+            media_type="application/zip",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ==================== ANNOTATION TYPES ====================
+@app.get("/api/annotation-types/")
+def get_annotation_types():
+    """Get all supported annotation types (Text, Audio, Image, Video, Multimodal)"""
+    return AnnotationTypeService.get_annotation_types()
+
+@app.post("/api/annotations/typed/")
+def create_typed_annotation(
+    payload: dict = Body(...),
+    db: Session = Depends(get_db)
+):
+    """Create annotation with specific type (sentiment, intent, NER, bounding box, etc.)"""
+    task_id = payload.get("task_id")
+    user_id = payload.get("user_id")
+    annotation_type = payload.get("annotation_type")
+    data = payload.get("data", {})
+    label_ids = payload.get("label_ids", [])
+    
+    annotation = AnnotationTypeService.create_annotation_with_type(
+        db, task_id, user_id, annotation_type, data, label_ids
+    )
+    
+    return {
+        "message": "Typed annotation created successfully",
+        "annotation_id": annotation.annotation_id,
+        "type": annotation_type
+    }
+
+# ==================== CROWD MANAGEMENT ====================
+@app.get("/api/crowd/leaderboard")
+def get_annotator_leaderboard(
+    time_period: str = 'week',
+    limit: int = 100,
+    db: Session = Depends(get_db)
+):
+    """Get annotator leaderboard by performance"""
+    leaderboard = CrowdManagementService.get_annotator_leaderboard(db, time_period, limit)
+    return {"time_period": time_period, "leaderboard": leaderboard}
+
+@app.get("/api/crowd/annotator/{user_id}/stats")
+def get_annotator_performance(
+    user_id: int,
+    days: int = 30,
+    db: Session = Depends(get_db)
+):
+    """Get detailed performance statistics for an annotator"""
+    stats = CrowdManagementService.get_annotator_stats(db, user_id, days)
+    return stats
+
+@app.get("/api/crowd/languages")
+def get_supported_languages(db: Session = Depends(get_db)):
+    """Get list of supported languages with annotator availability"""
+    languages = CrowdManagementService.get_language_support(db)
+    return {"total_languages": len(languages), "languages": languages}
+
+@app.post("/api/crowd/assign-experts")
+def assign_expert_annotators(
+    payload: dict = Body(...),
+    db: Session = Depends(get_db)
+):
+    """Intelligently assign expert annotators to a task"""
+    task_id = payload.get("task_id")
+    expertise = payload.get("expertise_required", "general")
+    language = payload.get("language", "en")
+    count = payload.get("count", 3)
+    
+    assigned_user_ids = CrowdManagementService.assign_expert_annotators(
+        db, task_id, expertise, language, count
+    )
+    
+    # Create task assignments
+    from services import annotation_service, user_service
+    assignments = []
+    for user_id in assigned_user_ids:
+        assignment_data = schemas.TaskAssignmentCreate(
+            task_id=task_id,
+            user_id=user_id,
+            assigned_by=payload.get("assigned_by", 1),
+            status="Pending"
+        )
+        assignment = annotation_service.create_task_assignment(db, assignment_data)
+        assignments.append({
+            "assignment_id": assignment.assignment_id,
+            "user_id": user_id
+        })
+    
+    return {
+        "task_id": task_id,
+        "experts_assigned": len(assignments),
+        "assignments": assignments
+    }
+
+@app.get("/api/crowd/metrics")
+def get_crowd_metrics(db: Session = Depends(get_db)):
+    """Get overall crowd performance metrics"""
+    metrics = CrowdManagementService.get_crowd_metrics(db)
+    return metrics
+
+@app.post("/api/crowd/create-pool")
+def create_annotator_pool(
+    payload: dict = Body(...),
+    db: Session = Depends(get_db)
+):
+    """Create a qualified annotator pool for a project"""
+    project_id = payload.get("project_id")
+    criteria = payload.get("criteria", {})
+    
+    pool = CrowdManagementService.create_annotator_pool(db, project_id, criteria)
+    return pool
+
+# ==================== RESOURCES & EDUCATION ====================
+@app.get("/api/resources/core-concepts")
+def get_core_concepts():
+    """Get core AI/ML concepts (High-Quality Data, NLP, Generative AI, Computer Vision, Multimodal)"""
+    return ResourcesService.get_core_concepts()
+
+@app.get("/api/resources/case-studies")
+def get_case_studies():
+    """Get platform case studies and success stories"""
+    return ResourcesService.get_case_studies()
+
+@app.get("/api/resources/blog")
+def get_blog_posts():
+    """Get blog posts and articles"""
+    return ResourcesService.get_blog_posts()
+
+@app.get("/api/resources/whitepapers")
+def get_whitepapers():
+    """Get whitepapers and research documents"""
+    return ResourcesService.get_whitepapers()
+
+@app.get("/api/resources/events")
+def get_events():
+    """Get upcoming events and conferences"""
+    return ResourcesService.get_events()
+
+@app.get("/api/resources/webinars")
+def get_webinars():
+    """Get webinars and online training sessions"""
+    return ResourcesService.get_webinars()
+
+@app.get("/api/resources/search")
+def search_resources(
+    q: str,
+    resource_type: str = 'all'
+):
+    """Search across all resources (blog, case_study, whitepaper, event, webinar)"""
+    return ResourcesService.search_resources(q, resource_type)
+
+# ==================== CLOUD STORAGE ====================
+@app.post("/api/cloud-storage/s3/upload")
+async def upload_to_s3(
+    file: UploadFile = File(...),
+    folder: str = "datasets",
+    db: Session = Depends(get_db)
+):
+    """Upload file to AWS S3"""
+    from services.cloud_storage_service import S3StorageService
+    import tempfile
+    
+    try:
+        # Initialize S3 service
+        s3_service = S3StorageService()
+        
+        # Save file temporarily
+        with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+            content = await file.read()
+            temp_file.write(content)
+            temp_path = temp_file.name
+        
+        # Upload to S3
+        result = s3_service.upload_file(temp_path, file.filename, folder)
+        
+        # Clean up temp file
+        os.unlink(temp_path)
+        
+        if result['success']:
+            # Create dataset entry
+            db_dataset = models.Dataset(
+                dataset_name=file.filename,
+                description=f"Uploaded to S3: {result['s3_key']}",
+                format=os.path.splitext(file.filename)[1]
+            )
+            db.add(db_dataset)
+            db.commit()
+            db.refresh(db_dataset)
+            
+            result['dataset_id'] = db_dataset.dataset_id
+        
+        return result
+        
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/cloud-storage/s3/list")
+def list_s3_files(folder: str = "datasets"):
+    """List files in S3 bucket"""
+    from services.cloud_storage_service import S3StorageService
+    
+    try:
+        s3_service = S3StorageService()
+        result = s3_service.list_files(folder)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/cloud-storage/s3/presigned-url")
+def get_s3_presigned_url(s3_key: str, expiration: int = 3600):
+    """Generate presigned URL for S3 object"""
+    from services.cloud_storage_service import S3StorageService
+    
+    try:
+        s3_service = S3StorageService()
+        url = s3_service.generate_presigned_url(s3_key, expiration)
+        
+        if url:
+            return {"success": True, "url": url, "expiration": expiration}
+        else:
+            return {"success": False, "error": "Failed to generate URL"}
+            
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/cloud-storage/s3/delete")
+def delete_s3_file(s3_key: str):
+    """Delete file from S3"""
+    from services.cloud_storage_service import S3StorageService
+    
+    try:
+        s3_service = S3StorageService()
+        result = s3_service.delete_file(s3_key)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ==================== OAUTH AUTHENTICATION ====================
+@app.get("/api/auth/oauth/providers")
+def get_oauth_providers():
+    """Get list of configured OAuth providers"""
+    from services.oauth_service import is_oauth_configured
+    
+    providers = is_oauth_configured()
+    return {
+        'providers': [{'name': name, 'enabled': enabled} for name, enabled in providers.items()]
+    }
+
+@app.get("/api/auth/oauth/{provider}/login")
+async def oauth_login(provider: str, request: Request):
+    """Initiate OAuth login flow"""
+    from services.oauth_service import oauth
+    from starlette.requests import Request as StarletteRequest
+    
+    if provider not in ['google', 'github']:
+        raise HTTPException(status_code=400, detail="Unsupported OAuth provider")
+    
+    # Convert FastAPI request to Starlette request for authlib
+    starlette_request = StarletteRequest(request.scope, request.receive)
+    
+    redirect_uri = f"{request.base_url}api/auth/oauth/{provider}/callback"
+    
+    try:
+        return await oauth.create_client(provider).authorize_redirect(starlette_request, redirect_uri)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/auth/oauth/{provider}/callback")
+async def oauth_callback(provider: str, request: Request, db: Session = Depends(get_db)):
+    """Handle OAuth callback"""
+    from services.oauth_service import oauth, OAuthService
+    from starlette.requests import Request as StarletteRequest
+    
+    if provider not in ['google', 'github']:
+        raise HTTPException(status_code=400, detail="Unsupported OAuth provider")
+    
+    starlette_request = StarletteRequest(request.scope, request.receive)
+    
+    try:
+        # Get token from OAuth provider
+        token = await oauth.create_client(provider).authorize_access_token(starlette_request)
+        
+        # Get user info
+        if provider == 'google':
+            user_info = OAuthService.get_google_user_info(token)
+        elif provider == 'github':
+            user_info = OAuthService.get_github_user_info(token)
+        else:
+            raise HTTPException(status_code=400, detail="Unsupported provider")
+        
+        if not user_info:
+            raise HTTPException(status_code=400, detail="Failed to get user info from OAuth provider")
+        
+        # Create or get user
+        user = OAuthService.create_or_get_user_from_oauth(db, user_info)
+        
+        # Create access token
+        access_token = create_access_token(data={"sub": user.username, "user_id": user.user_id, "role": user.role})
+        
+        return {
+            "access_token": access_token,
+            "token_type": "bearer",
+            "user": {
+                "user_id": user.user_id,
+                "username": user.username,
+                "email": user.email,
+                "role": user.role
+            }
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ==================== OCR ENDPOINTS ====================
+@app.post("/api/ocr/extract-text")
+async def extract_text_from_image(
+    file: UploadFile = File(...),
+    lang: str = "eng",
+    preprocess: bool = True
+):
+    """
+    Extract text from uploaded image using OCR
+    
+    Args:
+        file: Image file (JPG, PNG, etc.)
+        lang: Language code (eng, fra, deu, etc.)
+        preprocess: Apply image preprocessing for better OCR
+    
+    Returns:
+        Extracted text with confidence scores
+    """
+    from services.ocr_service import OCRService, is_tesseract_installed
+    import tempfile
+    
+    if not is_tesseract_installed():
+        raise HTTPException(
+            status_code=500,
+            detail="Tesseract OCR is not installed. Please install it first."
+        )
+    
+    try:
+        # Save uploaded file temporarily
+        with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.filename)[1]) as temp_file:
+            content = await file.read()
+            temp_file.write(content)
+            temp_path = temp_file.name
+        
+        # Preprocess if requested
+        if preprocess:
+            temp_path = OCRService.preprocess_image_for_ocr(temp_path, temp_path)
+        
+        # Extract text
+        result = OCRService.extract_text_from_image(temp_path, lang)
+        
+        # Clean up
+        os.unlink(temp_path)
+        
+        if result['success']:
+            result['filename'] = file.filename
+        
+        return result
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/ocr/extract-pdf")
+async def extract_text_from_pdf(
+    file: UploadFile = File(...),
+    first_page: int = 1,
+    last_page: Optional[int] = None
+):
+    """
+    Extract text from PDF using OCR
+    
+    Args:
+        file: PDF file
+        first_page: First page to process (1-indexed)
+        last_page: Last page to process (None for all)
+    
+    Returns:
+        Extracted text from all pages
+    """
+    from services.ocr_service import OCRService, is_tesseract_installed
+    import tempfile
+    
+    if not is_tesseract_installed():
+        raise HTTPException(
+            status_code=500,
+            detail="Tesseract OCR is not installed"
+        )
+    
+    if not file.filename.endswith('.pdf'):
+        raise HTTPException(status_code=400, detail="File must be a PDF")
+    
+    try:
+        # Save PDF temporarily
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
+            content = await file.read()
+            temp_file.write(content)
+            temp_path = temp_file.name
+        
+        # Extract text
+        result = OCRService.extract_text_from_pdf(temp_path, first_page, last_page)
+        
+        # Clean up
+        os.unlink(temp_path)
+        
+        if result['success']:
+            result['filename'] = file.filename
+        
+        return result
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/ocr/languages")
+def get_supported_languages():
+    """Get list of languages supported by OCR"""
+    from services.ocr_service import OCRService, is_tesseract_installed
+    
+    if not is_tesseract_installed():
+        # Return default list
+        return {
+            'languages': ['eng', 'fra', 'deu', 'spa', 'ita', 'por', 'rus', 'ara', 'chi_sim', 'jpn'],
+            'tesseract_installed': False
+        }
+    
+    try:
+        langs = OCRService.get_supported_languages()
+        return {
+            'languages': langs,
+            'tesseract_installed': True
+        }
+    except Exception as e:
+        return {
+            'error': str(e),
+            'tesseract_installed': False
+        }
 
 if __name__ == "__main__":
     port = int(os.getenv("API_PORT", 8000))

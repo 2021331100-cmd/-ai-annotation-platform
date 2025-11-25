@@ -17,9 +17,10 @@ class ProjectStatus(str, Enum):
     ON_HOLD = "On Hold"
 
 class ReviewStatus(str, Enum):
-    PENDING = "Pending"
-    APPROVED = "Approved"
-    REJECTED = "Rejected"
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    NEEDS_REVISION = "needs_revision"
 
 # User schemas
 class UserBase(BaseModel):
