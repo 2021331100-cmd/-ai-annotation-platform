@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { getTasks, createAnnotation, getLabels, getAnnotations, updateAnnotation, deleteAnnotation, getUserAnnotations } from '../api'
+import { getTasks, createAnnotation, getLabels, getAnnotations, updateAnnotation, deleteAnnotation, getUserAnnotations, getUserAssignments } from '../api'
 import { useAuthStore } from '../store/authStore'
 import AIAnnotationModal from '../components/AIAnnotationModal'
 import '../styles/Dashboard.css'
@@ -7,12 +7,14 @@ import '../styles/Dashboard.css'
 export default function Annotations() {
   const user = useAuthStore((state) => state.user)
   const [tasks, setTasks] = useState([])
+  const [assignedTasks, setAssignedTasks] = useState([])
   const [labels, setLabels] = useState([])
   const [annotations, setAnnotations] = useState([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [showAIModal, setShowAIModal] = useState(false)
   const [editingAnnotation, setEditingAnnotation] = useState(null)
+  const [selectedTask, setSelectedTask] = useState(null)
   const [formData, setFormData] = useState({
     task_id: '',
     content: '',
@@ -26,17 +28,32 @@ export default function Annotations() {
   const loadData = async () => {
     try {
       setLoading(true)
-      const [tasksRes, labelsRes] = await Promise.all([
-        getTasks(),
-        getLabels()
-      ])
-      setTasks(tasksRes.data || [])
+      const labelsRes = await getLabels()
       setLabels(labelsRes.data || [])
       
-      // Get annotations for the current user
+      // Get user's assigned tasks and annotations
       if (user?.id || user?.user_id) {
         const userId = user.user_id || user.id
-        const annotationsRes = await getUserAnnotations(userId)
+        const [assignmentsRes, annotationsRes] = await Promise.all([
+          getUserAssignments(userId),
+          getUserAnnotations(userId)
+        ])
+        
+        // Extract tasks from assignments
+        const assignments = assignmentsRes.data || []
+        setAssignedTasks(assignments)
+        
+        // Get full task details
+        const tasksList = assignments.map(a => ({
+          task_id: a.task_id,
+          assignment_id: a.assignment_id,
+          status: a.status,
+          due_date: a.due_date,
+          project: a.task?.project,
+          dataset: a.task?.dataset
+        }))
+        setTasks(tasksList)
+        
         setAnnotations(annotationsRes.data || [])
       }
     } catch (error) {
@@ -119,8 +136,8 @@ export default function Annotations() {
     <div className="dashboard">
       <div className="dashboard-header">
         <div>
-          <h1>✏️ Annotations</h1>
-          <p>Create and manage your annotations</p>
+          <h1>✏️ My Assigned Tasks & Annotations</h1>
+          <p>Annotate your assigned tasks</p>
         </div>
         <div style={{ display: 'flex', gap: '10px' }}>
           <button 
@@ -133,34 +150,28 @@ export default function Annotations() {
               color: '#fff',
               cursor: 'pointer',
               fontWeight: '600',
-              fontSize: '0.95rem'
+              fontSize: '0.95rem',
+              boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)'
             }}
           >
             🤖 AI Annotation
-          </button>
-          <button className="btn btn-primary" onClick={() => {
-            setEditingAnnotation(null)
-            setFormData({ task_id: '', content: '', label_ids: [] })
-            setShowModal(true)
-          }}>
-            + Create Annotation
           </button>
         </div>
       </div>
 
       <div className="stats-grid">
         <div className="stat-card">
-          <div className="stat-icon">📝</div>
-          <div className="stat-content">
-            <h3>{annotations.length}</h3>
-            <p>Total Annotations</p>
-          </div>
-        </div>
-        <div className="stat-card">
           <div className="stat-icon">📋</div>
           <div className="stat-content">
             <h3>{tasks.length}</h3>
-            <p>Available Tasks</p>
+            <p>Assigned Tasks</p>
+          </div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-icon">✅</div>
+          <div className="stat-content">
+            <h3>{annotations.length}</h3>
+            <p>My Annotations</p>
           </div>
         </div>
         <div className="stat-card">
@@ -170,47 +181,188 @@ export default function Annotations() {
             <p>Available Labels</p>
           </div>
         </div>
+        <div className="stat-card">
+          <div className="stat-icon">⏳</div>
+          <div className="stat-content">
+            <h3>{tasks.filter(t => t.status === 'Pending').length}</h3>
+            <p>Pending Tasks</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Assigned Tasks Section */}
+      <div className="dashboard-section">
+        <h2>📋 My Assigned Tasks</h2>
+        {tasks.length === 0 ? (
+          <div className="empty-state">
+            <div className="empty-state-icon">📭</div>
+            <h3>No tasks assigned yet</h3>
+            <p>Wait for a manager to assign tasks to you</p>
+          </div>
+        ) : (
+          <div className="task-list" style={{ display: 'grid', gap: '15px' }}>
+            {tasks.map((task) => {
+              const taskAnnotations = annotations.filter(a => a.task_id === task.task_id)
+              return (
+                <div key={task.task_id} className="task-card" style={{ 
+                  background: '#fff', 
+                  padding: '20px', 
+                  borderRadius: '12px', 
+                  border: '2px solid #e0e0e0',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '15px' }}>
+                    <div>
+                      <h3 style={{ margin: 0, fontSize: '1.2rem', color: '#333' }}>
+                        Task #{task.task_id}
+                      </h3>
+                      {task.project && (
+                        <p style={{ margin: '5px 0', color: '#666', fontSize: '0.9rem' }}>
+                          📁 Project: <strong>{task.project.project_name}</strong>
+                        </p>
+                      )}
+                      {task.due_date && (
+                        <p style={{ margin: '5px 0', color: '#ff9800', fontSize: '0.9rem' }}>
+                          ⏰ Due: {new Date(task.due_date).toLocaleDateString()}
+                        </p>
+                      )}
+                    </div>
+                    <span className={`status-badge status-${(task.status || 'pending').toLowerCase()}`}>
+                      {task.status || 'Pending'}
+                    </span>
+                  </div>
+                  
+                  <div style={{ marginBottom: '15px', padding: '12px', background: '#f8f9fa', borderRadius: '8px' }}>
+                    <p style={{ margin: 0, fontSize: '0.9rem', color: '#666' }}>
+                      <strong>Annotations:</strong> {taskAnnotations.length} created
+                    </p>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                    <button 
+                      className="btn btn-primary"
+                      onClick={() => {
+                        setSelectedTask(task)
+                        setEditingAnnotation(null)
+                        setFormData({ task_id: task.task_id.toString(), content: '', label_ids: [] })
+                        setShowModal(true)
+                      }}
+                    >
+                      ✏️ Create Annotation
+                    </button>
+                    <button 
+                      className="btn btn-secondary"
+                      onClick={() => {
+                        setSelectedTask(task)
+                        setShowAIModal(true)
+                      }}
+                      style={{
+                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                        border: 'none',
+                        color: '#fff'
+                      }}
+                    >
+                      🤖 AI Assist
+                    </button>
+                    {taskAnnotations.length > 0 && (
+                      <button 
+                        className="btn btn-sm"
+                        onClick={() => {
+                          const annotationsList = taskAnnotations.map((a, i) => 
+                            `${i+1}. ${a.content ? (typeof a.content === 'string' ? a.content.substring(0, 50) : JSON.stringify(a.content).substring(0, 50)) : 'No content'}...`
+                          ).join('\n')
+                          alert(`Annotations for Task #${task.task_id}:\n\n${annotationsList}`)
+                        }}
+                        style={{ background: '#28a745', color: '#fff', border: 'none' }}
+                      >
+                        📝 View {taskAnnotations.length} Annotation{taskAnnotations.length > 1 ? 's' : ''}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       <div className="dashboard-section">
-        <h2>My Annotations</h2>
+        <h2>📝 All My Annotations</h2>
         {annotations.length === 0 ? (
-          <div className="empty-state">
-            <div className="empty-state-icon">✏️</div>
+          <div className="empty-state" style={{ padding: '40px', textAlign: 'center' }}>
+            <div className="empty-state-icon" style={{ fontSize: '3rem' }}>✏️</div>
             <h3>No annotations yet</h3>
-            <p>Start creating annotations for your assigned tasks</p>
-            <button className="btn btn-primary" onClick={() => setShowModal(true)}>
-              Create First Annotation
-            </button>
+            <p>Start creating annotations for your assigned tasks above</p>
           </div>
         ) : (
           <div className="annotation-list">
             {annotations.map((annotation) => (
-              <div key={annotation.annotation_id} className="annotation-item">
-                <div className="annotation-details">
-                  <p><strong>Task #{annotation.task_id}</strong></p>
-                  <p>{annotation.content || 'No content'}</p>
-                  <div style={{ marginTop: '10px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <div key={annotation.annotation_id} className="annotation-item" style={{
+                background: '#fff',
+                padding: '20px',
+                borderRadius: '12px',
+                border: '2px solid #e0e0e0',
+                marginBottom: '15px'
+              }}>
+                <div className="annotation-details" style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '10px' }}>
+                    <span style={{ 
+                      background: '#667eea', 
+                      color: '#fff', 
+                      padding: '4px 12px', 
+                      borderRadius: '12px',
+                      fontSize: '0.85rem',
+                      fontWeight: '600'
+                    }}>
+                      Task #{annotation.task_id}
+                    </span>
+                    {tasks.find(t => t.task_id === annotation.task_id)?.project && (
+                      <span style={{ color: '#666', fontSize: '0.9rem' }}>
+                        {tasks.find(t => t.task_id === annotation.task_id).project.project_name}
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ 
+                    background: '#f8f9fa', 
+                    padding: '12px', 
+                    borderRadius: '8px', 
+                    marginBottom: '10px',
+                    maxHeight: '100px',
+                    overflow: 'auto'
+                  }}>
+                    <pre style={{ margin: 0, fontSize: '0.85rem', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                      {annotation.content || 'No content'}
+                    </pre>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '10px' }}>
                     {annotation.labels?.map(label => (
-                      <span key={label.label_id} className="chip">
-                        {label.label_name}
+                      <span key={label.label_id} style={{
+                        background: label.color_code || '#4ECDC4',
+                        color: '#fff',
+                        padding: '4px 12px',
+                        borderRadius: '12px',
+                        fontSize: '0.85rem'
+                      }}>
+                        🏷️ {label.label_name}
                       </span>
                     ))}
                   </div>
-                  <small>{new Date(annotation.create_date).toLocaleString()}</small>
+                  <small style={{ color: '#999' }}>
+                    📅 {new Date(annotation.create_date).toLocaleString()}
+                  </small>
                 </div>
-                <div style={{ display: 'flex', gap: '10px' }}>
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
                   <button 
                     className="btn btn-sm btn-secondary"
                     onClick={() => handleEdit(annotation)}
                   >
-                    Edit
+                    ✏️ Edit
                   </button>
                   <button 
                     className="btn btn-sm btn-danger"
                     onClick={() => handleDelete(annotation.annotation_id)}
                   >
-                    Delete
+                    🗑️ Delete
                   </button>
                 </div>
               </div>
@@ -240,10 +392,15 @@ export default function Annotations() {
                     <option value="">Select a task</option>
                     {tasks.map(t => (
                       <option key={t.task_id} value={t.task_id}>
-                        Task #{t.task_id} - Project {t.project_id}
+                        Task #{t.task_id}{t.project ? ` - ${t.project.project_name}` : ''}
                       </option>
                     ))}
                   </select>
+                  {tasks.length === 0 && (
+                    <small style={{ color: '#ff9800', marginTop: '5px', display: 'block' }}>
+                      No assigned tasks available. Ask your manager to assign tasks to you.
+                    </small>
+                  )}
                 </div>
                 <div className="form-group">
                   <label>Annotation Content (JSON Format)</label>
@@ -297,9 +454,13 @@ export default function Annotations() {
       {/* AI Annotation Modal */}
       <AIAnnotationModal
         show={showAIModal}
-        onClose={() => setShowAIModal(false)}
+        onClose={() => {
+          setShowAIModal(false)
+          setSelectedTask(null)
+        }}
         onSuccess={loadData}
         tasks={tasks}
+        task={selectedTask}
       />
     </div>
   )
