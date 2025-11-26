@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { getUsers, getProjects, getTasks, getAuditLogs } from '../api'
+import { getUsers, getProjects, getTasks, getAuditLogs, getDatasets } from '../api'
 import { useAuthStore } from '../store/authStore'
 import DatasetUploadModal from '../components/DatasetUploadModal'
 import TaskAssignmentModal from '../components/TaskAssignmentModal'
@@ -17,6 +17,7 @@ function AdminDashboard() {
     activeUsers: 0,
   })
   const [recentActivity, setRecentActivity] = useState([])
+  const [datasets, setDatasets] = useState([])
   const [loading, setLoading] = useState(true)
   const [showUploadModal, setShowUploadModal] = useState(false)
   const [showAssignModal, setShowAssignModal] = useState(false)
@@ -29,11 +30,12 @@ function AdminDashboard() {
 
   const loadDashboardData = async () => {
     try {
-      const [usersRes, projectsRes, tasksRes, logsRes] = await Promise.all([
+      const [usersRes, projectsRes, tasksRes, logsRes, datasetsRes] = await Promise.all([
         getUsers(),
         getProjects(),
         getTasks(),
         getAuditLogs({ limit: 10 }),
+        getDatasets(),
       ])
 
       setStats({
@@ -44,6 +46,7 @@ function AdminDashboard() {
       })
 
       setRecentActivity(logsRes.data || [])
+      setDatasets(datasetsRes.data || [])
     } catch (error) {
       console.error('Failed to load dashboard data:', error)
     } finally {
@@ -129,6 +132,44 @@ function AdminDashboard() {
                   </div>
                 </div>
               ))
+            )}
+          </div>
+        </div>
+
+        <div className="dashboard-section">
+          <h2>Uploaded Datasets</h2>
+          <div className="datasets-list">
+            {datasets.length === 0 ? (
+              <p>No datasets uploaded yet</p>
+            ) : (
+              <div className="table-container">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Dataset Name</th>
+                      <th>Project</th>
+                      <th>File Type</th>
+                      <th>Uploaded</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {datasets.map((dataset) => (
+                      <tr key={dataset.dataset_id}>
+                        <td><strong>{dataset.dataset_name}</strong></td>
+                        <td>{dataset.project?.project_name || 'N/A'}</td>
+                        <td>{dataset.format || 'Unknown'}</td>
+                        <td>{new Date(dataset.create_date).toLocaleString()}</td>
+                        <td>
+                          <span className="status-badge status-active">
+                            Active
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
         </div>

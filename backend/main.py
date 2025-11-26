@@ -360,7 +360,27 @@ def get_upload_statistics(db: Session = Depends(get_db)):
 
 @app.get("/api/datasets/", response_model=List[schemas.Dataset])
 def list_datasets(skip: int = 0, limit: int = 100, project_id: Optional[int] = None, db: Session = Depends(get_db)):
-    return project_service.get_datasets(db, skip, limit, project_id)
+    """List all datasets with project information"""
+    from sqlalchemy.orm import joinedload
+    
+    query = db.query(models.Dataset)
+    if project_id:
+        # Filter by project through tasks
+        query = query.join(models.AnnotationTask).filter(models.AnnotationTask.project_id == project_id)
+    
+    datasets = query.offset(skip).limit(limit).all()
+    
+    # Enrich with project info from tasks
+    for dataset in datasets:
+        # Get first task associated with this dataset to get project
+        task = db.query(models.AnnotationTask).filter(
+            models.AnnotationTask.dataset_id == dataset.dataset_id
+        ).first()
+        
+        if task and task.project:
+            dataset.project = task.project
+    
+    return datasets
 
 @app.get("/api/datasets/{dataset_id}", response_model=schemas.Dataset)
 def get_dataset(dataset_id: int, db: Session = Depends(get_db)):

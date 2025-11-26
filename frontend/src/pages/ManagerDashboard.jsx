@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { getTasks, getProjects, getUsers } from '../api'
+import { getTasks, getProjects, getUsers, getDatasets } from '../api'
 import { useAuthStore } from '../store/authStore'
 import DatasetUploadModal from '../components/DatasetUploadModal'
 import TaskAssignmentModal from '../components/TaskAssignmentModal'
@@ -13,6 +13,7 @@ function ManagerDashboard() {
   const [projects, setProjects] = useState([])
   const [tasks, setTasks] = useState([])
   const [team, setTeam] = useState([])
+  const [datasets, setDatasets] = useState([])
   const [stats, setStats] = useState({
     totalProjects: 0,
     activeTasks: 0,
@@ -31,15 +32,17 @@ function ManagerDashboard() {
 
   const loadDashboardData = async () => {
     try {
-      const [projectsRes, tasksRes, usersRes] = await Promise.all([
+      const [projectsRes, tasksRes, usersRes, datasetsRes] = await Promise.all([
         getProjects(),
         getTasks(),
         getUsers(),
+        getDatasets(),
       ])
 
       setProjects(projectsRes.data || [])
       setTasks(tasksRes.data || [])
       setTeam(usersRes.data.filter(u => u.role !== 'Admin') || [])
+      setDatasets(datasetsRes.data || [])
 
       const activeProjects = projectsRes.data.filter(p => p.status === 'Active').length
 
@@ -134,6 +137,44 @@ function ManagerDashboard() {
             <button className="action-btn" onClick={() => window.location.href = '/users'}>
               <span>👥</span> Manage Team
             </button>
+          </div>
+        </div>
+
+        <div className="dashboard-section">
+          <h2>Uploaded Datasets</h2>
+          <div className="datasets-list">
+            {datasets.length === 0 ? (
+              <p>No datasets uploaded yet</p>
+            ) : (
+              <div className="table-container">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Dataset Name</th>
+                      <th>Project</th>
+                      <th>File Type</th>
+                      <th>Uploaded</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {datasets.map((dataset) => (
+                      <tr key={dataset.dataset_id}>
+                        <td><strong>{dataset.dataset_name}</strong></td>
+                        <td>{dataset.project?.project_name || 'N/A'}</td>
+                        <td>{dataset.format || 'Unknown'}</td>
+                        <td>{new Date(dataset.create_date).toLocaleString()}</td>
+                        <td>
+                          <span className="status-badge status-active">
+                            Active
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
 
