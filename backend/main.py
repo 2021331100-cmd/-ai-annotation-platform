@@ -496,16 +496,8 @@ def delete_dataset(dataset_id: int, db: Session = Depends(get_db), current_user:
     db.commit()
     
     return {"message": "Dataset deleted successfully", "dataset_id": dataset_id}
-    
-    # Paginate
-    total = len(data_items)
-    paginated_items = data_items[skip:skip+limit]
-    
-    return {
-        "dataset_id": dataset_id,
-        "total": total,
-        "items": paginated_items,
-        "skip": skip,
+
+# ==========================================
         "limit": limit
     }
 
