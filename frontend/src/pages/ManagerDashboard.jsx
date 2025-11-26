@@ -100,17 +100,28 @@ function ManagerDashboard() {
   }
 
   const handleDeleteDataset = async (datasetId, datasetName) => {
-    if (!window.confirm(`Are you sure you want to delete "${datasetName}"? This action cannot be undone.`)) {
+    const confirmed = window.confirm(`Are you sure you want to delete "${datasetName}"? This action cannot be undone.`)
+    console.log('Delete confirmation:', confirmed)
+    
+    if (!confirmed) {
+      console.log('Delete cancelled by user')
       return
     }
     
     try {
       const token = localStorage.getItem('token')
+      if (!token) {
+        alert('You are not logged in. Please log in again.')
+        return
+      }
+      
       const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
+      const url = `${API_BASE_URL}/api/datasets/${datasetId}`
       
-      console.log('Deleting dataset:', datasetId)
+      console.log('DELETE Request:', url)
+      console.log('Token:', token ? 'Present' : 'Missing')
       
-      const response = await axios.delete(`${API_BASE_URL}/api/datasets/${datasetId}`, {
+      const response = await axios.delete(url, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -119,10 +130,13 @@ function ManagerDashboard() {
       
       console.log('Delete response:', response.data)
       alert('Dataset deleted successfully!')
-      loadDashboardData() // Reload the dashboard
+      await loadDashboardData() // Reload the dashboard
     } catch (error) {
-      console.error('Delete dataset error:', error)
-      const errorMessage = error.response?.data?.detail || error.message || 'Unknown error occurred'
+      console.error('Delete dataset full error:', error)
+      console.error('Error response:', error.response)
+      console.error('Error data:', error.response?.data)
+      
+      const errorMessage = error.response?.data?.detail || error.response?.statusText || error.message || 'Unknown error occurred'
       alert(`Failed to delete dataset: ${errorMessage}`)
     }
   }
