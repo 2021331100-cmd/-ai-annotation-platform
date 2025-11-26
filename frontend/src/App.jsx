@@ -59,8 +59,6 @@ function App() {
             </div>
             <div className="navbar-menu">
               <Link to="/" className="navbar-item">Home</Link>
-              <Link to="/annotation-types" className="navbar-item">🎨 Annotation Types</Link>
-              <Link to="/resources" className="navbar-item">📚 Resources</Link>
               <Link to="/signin" className="navbar-item" style={{
                 background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                 color: '#fff',
@@ -103,11 +101,8 @@ function App() {
               {(user?.role === 'Admin' || user?.role === 'Manager') && (
                 <>
                   <Link to="/crowd" className="navbar-item">👥 Crowd</Link>
-                  <Link to="/quality" className="navbar-item">📊 Quality</Link>
                 </>
               )}
-              <Link to="/annotation-types" className="navbar-item">🎨 Types</Link>
-              <Link to="/resources" className="navbar-item">📚 Resources</Link>
               <Link to="/advanced" className="navbar-item" style={{
                 background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                 color: '#fff',
