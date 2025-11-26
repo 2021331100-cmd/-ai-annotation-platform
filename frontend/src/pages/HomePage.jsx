@@ -60,6 +60,29 @@ function HomePage() {
         </div>
       </div>
 
+      <div className="explore-section">
+        <h2>Explore More</h2>
+        <div className="explore-grid">
+          <Link to="/quality" className="explore-card">
+            <div className="explore-icon">📊</div>
+            <h3>Quality Metrics</h3>
+            <p>View quality scores, inter-annotator agreement, and performance analytics</p>
+          </Link>
+          
+          <Link to="/annotation-types" className="explore-card">
+            <div className="explore-icon">🎨</div>
+            <h3>Annotation Types</h3>
+            <p>Discover all supported annotation types including text, image, and video</p>
+          </Link>
+          
+          <Link to="/resources" className="explore-card">
+            <div className="explore-icon">📚</div>
+            <h3>Resources</h3>
+            <p>Access documentation, tutorials, and learning materials</p>
+          </Link>
+        </div>
+      </div>
+
       <div className="roles-section">
         <h2>Designed for Every Role</h2>
         <div className="roles-grid">
