@@ -42,6 +42,29 @@ def create_access_token(data: dict):
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
+def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    """Get current user from JWT token"""
+    credentials_exception = HTTPException(
+        status_code=401,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        user_id: int = payload.get("user_id")
+        role: str = payload.get("role")
+        if username is None or user_id is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+    
+    user = user_service.get_user_by_username(db, username)
+    if user is None:
+        raise credentials_exception
+    
+    return {"user_id": user_id, "username": username, "role": role, "email": user.email}
+
 # Create database tables
 models.Base.metadata.create_all(bind=engine)
 
@@ -398,21 +421,81 @@ def get_dataset_data(dataset_id: int, skip: int = 0, limit: int = 100, db: Sessi
     
     import json
     import csv
+    import os
+    
+    # Find the file in uploads directory
+    upload_dir = "backend/uploads/datasets"
+    file_path = None
+    
+    # Search for file matching dataset name
+    if os.path.exists(upload_dir):
+        for filename in os.listdir(upload_dir):
+            if dataset.dataset_name in filename or filename.startswith(dataset.dataset_name):
+                file_path = os.path.join(upload_dir, filename)
+                break
+    
+    if not file_path or not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Dataset file not found")
     
     data_items = []
-    file_path = dataset.file_path
+    file_ext = dataset.format.lower()
     
-    if dataset.file_type == 'csv':
-        with open(file_path, 'r', encoding='utf-8') as f:
-            reader = csv.DictReader(f)
-            data_items = list(reader)
-    elif dataset.file_type == 'json':
-        with open(file_path, 'r', encoding='utf-8') as f:
-            data_items = json.load(f)
-    elif dataset.file_type == 'txt':
-        with open(file_path, 'r', encoding='utf-8') as f:
-            lines = f.readlines()
-            data_items = [{'text': line.strip(), 'line_number': i+1} for i, line in enumerate(lines) if line.strip()]
+    try:
+        if file_ext == 'csv':
+            with open(file_path, 'r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                data_items = list(reader)[skip:skip+limit]
+        elif file_ext == 'json':
+            with open(file_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                if isinstance(data, list):
+                    data_items = data[skip:skip+limit]
+                else:
+                    data_items = [data]
+        elif file_ext == 'txt':
+            with open(file_path, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+                data_items = [{'text': line.strip(), 'line_number': i+1} for i, line in enumerate(lines[skip:skip+limit]) if line.strip()]
+        else:
+            data_items = [{'message': 'Preview not available for this file type', 'file_type': file_ext}]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to read dataset: {str(e)}")
+    
+    return {
+        "dataset_id": dataset_id,
+        "dataset_name": dataset.dataset_name,
+        "format": dataset.format,
+        "total_count": len(data_items),
+        "data": data_items
+    }
+
+@app.delete("/api/datasets/{dataset_id}")
+def delete_dataset(dataset_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    """Delete a dataset (Admin/Manager only)"""
+    if current_user['role'] not in ['Admin', 'Manager']:
+        raise HTTPException(status_code=403, detail="Not authorized to delete datasets")
+    
+    dataset = project_service.get_dataset(db, dataset_id)
+    if not dataset:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+    
+    # Delete the physical file
+    import os
+    upload_dir = "backend/uploads/datasets"
+    if os.path.exists(upload_dir):
+        for filename in os.listdir(upload_dir):
+            if dataset.dataset_name in filename or filename.startswith(dataset.dataset_name):
+                file_path = os.path.join(upload_dir, filename)
+                try:
+                    os.remove(file_path)
+                except Exception as e:
+                    print(f"Warning: Could not delete file {file_path}: {str(e)}")
+    
+    # Delete from database
+    db.delete(dataset)
+    db.commit()
+    
+    return {"message": "Dataset deleted successfully", "dataset_id": dataset_id}
     
     # Paginate
     total = len(data_items)
