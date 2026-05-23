@@ -498,10 +498,6 @@ def delete_dataset(dataset_id: int, db: Session = Depends(get_db), current_user:
     return {"message": "Dataset deleted successfully", "dataset_id": dataset_id}
 
 # ==========================================
-        "limit": limit
-    }
-
-# ==========================================
 # LABEL ENDPOINTS
 # ==========================================
 @app.post("/api/labels/", response_model=schemas.Label)
